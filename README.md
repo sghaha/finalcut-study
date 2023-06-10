@@ -553,3 +553,7 @@ https://www.youtube.com/watch?v=xCru0cg07eM
   
 * 환호
   1) 경기장 군중 환호 소리
+
+
+## 반응형 자막 만들기
+https://www.youtube.com/watch?v=zYE1G-FqEEk
