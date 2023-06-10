@@ -496,3 +496,60 @@ file - relink files(파일다시연결)
 
 ## 모션 움직임 프레임때문에 느려지거나 빨라질때
 https://www.youtube.com/watch?v=xCru0cg07eM
+
+
+## 효과음 모음
+* 신비롭고 & 뭔가 시작되는 느낌
+  1) Bell Cascade 1
+  2) 천상의 소리
+  3) Harp Transition 2 (2배속)
+  4) Chimes 2
+* 시간 흐르는 소리
+  1) 자전거 주행
+  2) Scratch
+* 등장 관련 짧게
+  1) 짧은 브라스 효과음(앞쪽만)
+  2) 서스펜스 효과음 02 (2배속)
+  3) Impact Hit Reverb 01
+  4) Crash Metal 2(2배속)
+  5) Impact Metal (2배속)
+  6) Bullet 2
+  7) Basketball Bounce in Gym
+  8) Cartoon Accent 04
+  9) Cymbal Transition 1
+  10) Whoosh 06
+* 나중에 갠춘할것같은 소리
+  1) 축구 2
+  2) 코르크 병마개
+  3) 만화(또르르 구르는 소리)
+  4) 야구 방망이 2
+  5) 군중 야유 소리
+  6) 극적인 효과음 01
+  7) 서스펜스 효과음
+  8) 컴퓨터 데이터 02
+  9) 컴퓨터 데이터 03
+  10) 부드럽게 울리는 소리
+  11) 테이프 되감기
+  12) 개 짖는 소리
+  13) Balloon Pop
+  14) Mid Frequency Flutter FX 04
+  15) Impact Knock
+  16) Impact Hit 
+  17) Sword 1
+  18) Cartoon Accent 17
+  19) Electronic Hit FX 07
+  20) Swish 1
+  21) Swish 2
+  22) Electronic Hit FX 27
+* 깨지는 소리
+  1) Auto Crash Metal 2
+* 뻘쭘 할때
+  1) 양 울음 소리
+  2) 소 울음 소리
+  3) 수탉 울음 소리
+  4) 시트콤 웃는 소리 08
+* 약간 긴 효과음
+  1) 록 리프 태그
+  
+* 환호
+  1) 경기장 군중 환호 소리
