@@ -490,3 +490,9 @@ file - relink files(파일다시연결)
 * 테마는 카테고리 안쪽 소분류
 * 발행
 * 이제 파이널컷 프로로 가면 생성된걸 볼 수 있다.
+
+
+
+
+## 모션 움직임 프레임때문에 느려지거나 빨라질때
+https://www.youtube.com/watch?v=xCru0cg07eM
