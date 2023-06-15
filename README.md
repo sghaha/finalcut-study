@@ -562,3 +562,56 @@ https://www.youtube.com/watch?v=zYE1G-FqEEk
 https://coolors.co/   
 https://www.webdesignrankings.com/resources/lolcolors/   
 https://color.adobe.com/ko/create/color-wheel
+
+
+
+# 대충 파이널컷 기본음악중 추려놓은것
+### 빠른음악
+- 프로그레시브 하우스
+- 클럽
+- 하프돔(길게)
+- 편안한공간(길게)
+- 잠복근무
+- 모토크로스
+- 킥플립
+- 브레이크비트
+- 헤드스핀
+- 갤러리아
+
+### 평화롭고 빠른 템포
+- 모닥불
+- 난롯가
+- 서부 지역
+- 섬
+
+### 엉뚱한 음악
+- 3점슛
+- 와일드 카드
+
+### 4차원(?)적인 음악
+- 예술가 작업실
+- 이스트 엔드
+- 상상의 나래
+
+### 조용한 음악
+- 외출(중간)
+- 하프문 베이
+
+### 웅장한 음악
+- 도그마
+- 영롱한 기타
+### 기타
+- 뉴스 오프닝
+
+
+# NCS
+### 빠른 음악
+- https://www.youtube.com/watch?v=z4RfRxxz5lw
+
+### 잔잔하고 웅장
+- https://www.youtube.com/watch?v=6NKZ7mscEyY&t=0s
+### 웅장/암울/Epic
+- https://www.youtube.com/watch?v=qfbt2catqVg
+
+### 멍청하고 코믹한음악
+- https://www.youtube.com/watch?v=DcLJR3Grr_M
