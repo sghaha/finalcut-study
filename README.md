@@ -607,6 +607,12 @@ https://color.adobe.com/ko/create/color-wheel
 # NCS
 ### 빠른 음악
 - https://www.youtube.com/watch?v=z4RfRxxz5lw
+- 033 : https://www.youtube.com/watch?v=7bZAPzJmxe4
+- 017 : https://www.youtube.com/watch?v=e-5idsBCzZg
+- 200 : https://www.youtube.com/watch?v=2-2s9usFzZM&t=19s
+
+### 미디엄 템포 
+- https://www.youtube.com/watch?v=5_pwvUwa1zw
 
 ### 잔잔하고 웅장
 - https://www.youtube.com/watch?v=6NKZ7mscEyY&t=0s
@@ -615,3 +621,6 @@ https://color.adobe.com/ko/create/color-wheel
 
 ### 멍청하고 코믹한음악
 - https://www.youtube.com/watch?v=DcLJR3Grr_M
+
+### 경쾌/Piano
+- https://www.youtube.com/watch?v=P0SfHRQY1A4
