@@ -1095,11 +1095,110 @@ spec:
 4) 그런데 회색(Other)파드가 빨노파 노드에 붙을수가있다.
 
 
+## 34.3 이제 테인트&톨러레이션 & 노드 어피니티 모두를 이용하여 해결해보자
+1) 처음엔 빨노파 노드 표시를 한다(테인트)
+2) 빨노파 파드에 톨러레이션을 걸어준다.
+3) 그다음에 노드 어피니티로 노드가 다른데 가는걸 막아준다고 한다. 
 
 
 
+---
+## 35. Resource Requirement and Limit
+- 각각의 파드는 필요한 양의 cpu와 mem이 이있고 이를 kube-scheduler가 보고 어느 노드에 들어갈지 결정한다.
+- 이때 스케쥴러는 필요한 리소스 양을 고려한다. 
+- 아래와 같이 우너하는 리소스를 명시해줄 수있다.
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers: 
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+      - cotainerPort: 8080
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: 2
+```
+
+### 35.1 CPU 1개는 무슨 뜻일까? 정녕 무슨 단위인걸까?
+- cpu의 제일 작은 단위는 1m이다 (밀리)
+- 1카운트는 vCPU 하나와 같다.
+- 메모리는 1G, 1M, 1K, 1Gi, 1Mi, 1Ki 등등의 단위로 적으면된다. (Ki는 1024, K는 걍 1000)
 
 
+### 35.2 Limit
+- 지금까지는 최소요구사항이고 이 파드가 사용하는 Limit를 정해줄수도있다.
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers: 
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+      - cotainerPort: 8080
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: 1
+      limits:
+        memory: "4Gi"
+        cpu: 2
+``` 
+
+### 35.3 파드가 limit보다 자원을 많이 쓰려한다면 어떻게 될까?
+- cpu의 경우 시스템이 cpu를 조절해 지정된 한도를 넘지 않도록 한다.
+- 하지만 메모리는 그렇지 않다. 한도보다 많은 메모리리소스를 쓸 수 있다. 그러면 파드는 종료된다. 그리고 out of memory를 출력함
+
+### 36.4 알아두자
+- defulat는 limit을 안걸어 주는것이기 떄문에 cpu랑 메모리를 많이써서 다른 파드를 질식 시킬수있다.
+- 만약에 requests는 안정하고 limit만 정하면 k8s는 자동적으로 limit값으로 할당한다.
+- 사실 limit은 안정하는게 좋을수 있다. 그럴려면 모든 포드에 대한 request를 정해줘야 안전하다
+
+### 36.5 LimitRange
+```
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-resource-constraint
+spec:
+  limits:
+  - default:
+      cpu: 500m
+    defaultRequest:
+      cpu: 500m
+    max:
+      cpu: "1"
+    min:
+      cpu: 100m
+    type: Container
+```
+```
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: memory-resource-constraint
+spec:
+  limits:
+  - default:
+      memory: 1Gi
+    defaultRequest:
+      memory: 1Gi
+    max:
+      memory: 1Gi
+    min:
+      memory: 500Mi
+    type: Container
+```
+
+### 36.6 Resource Quotas
+- 네임스페이스 레벨로 리퀘스트와 리밋을 정해줄수있다.
 
 
 
