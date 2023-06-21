@@ -278,6 +278,848 @@ kubectl create -f pod-definitaion.yml
 
 
 
+## 21. 실습 코스 url
+https://uklabs.kodekloud.com/courses/labs-certified-kubernetes-administrator-with-practice-tests/
+
+## 22. pod 관련 Lab 메모
+- pod몇개있는지 확인해봐라
+ ```
+kubectl get pods
+ ```
+- 좀더 다양한 정보를 보고 싶으면
+```
+kubectl get pods -o wide
+```
+
+- nginx 이미지를 이용하여 pod를 띄워봐라  (사실 나는 yaml로 띄웠음)
+```
+kubectl run nginx --image=nginx
+```
+
+- 파드가 어떤 이미지를 사용했는지 알아보자
+```
+kubectl describe pod <pod이름>
+```
+여러가지 정보가 있는데 Containers 항목을 보면 된다.
+
+
+
+- 파드가 어떤 노드에 떴는지 알아보자
+```
+kubectl describe pod <pod이름>
+```
+Node : 항목을 보면 어떤 노드에 뜬지 보인다.
+
+- 아니면
+```
+kubectl get pods -o wide
+```
+이걸로 해도 노드 보임
+
+
+
+- 파드 안에 몇개의 컨테이너가 있는지 보는것도 describe
+
+
+
+- dry run 그리고 yaml 출력 : 아래와 같이 하면 대충 명령어를 yaml로 만들어 주는듯?
+```
+kubectl run redis --image=redis123 --dry-run=client -o yaml
+```
+```
+kubectl run redis --image=redis123 --dry-run=client -o yaml > redis.yaml
+```
+
+
+---
+
+
+
+## 23. ReplicaSets
+
+### 23.1 Replication Controller
+- 레플리카는 무엇이고 Replication Controller 은 왜 필요한가? :
+- 한 파드가 고장나면 유저는 서비스를 이용할 수 없다.
+- 사용자가 앱을 계속 이용할 수 있도록 고장나면 바로 다른게 실행되어야함 레플리케이션 컨트롤러가 그걸 해준다.
+
+### 23.2 레플리케이션 컨트롤러가 필요한 다른이유
+- 로드밸런싱 & 스케일링
+- (레플리케이션 컨트롤러 안에 같은 파드가 여러개 띄워져 있다고 생각하면됨)
+- 만약 이렇게 파드를 스케일 아웃하다가 노드에 공간이 부족하면 레플리케이션 컨트롤러의 영역이 다른 노드까지 확장됨
+
+### 23.3 레플리케이션 컨트롤러를 생성하는 방법
+- 역시나 아래 4가지 섹션이 기본 틀이다
+```
+apiVersion:
+kind:
+metadata:
+
+
+spec:
+```
+
+- apiVersion : 레플리케이션 컨트롤러는 v1임
+- spec : template : 사용할 pod 템플릿을 제공하기 위함, template하위에는 pod를 적어내면됨(대신 apiVersion이랑 kind는 안써도됨)
+
+
+
+```
+apiVersion: v1
+kind: ReplicationController 
+metadata:
+  name: myaap-rc
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  template: 
+    metadata:  #여기서부터 ---------------------------------
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+      spec:
+        containers:
+        - name: nginx-container
+          image: nginx #여기까지가 pod관련 내용임 -----------
+```
+
+
+- 여기까지 하면 부모-레플리케이션 컨트롤러, 자식-pod의 구조가 된다.
+- 이제 파드를 몇개 띄워냐 같은 정보가 필요하다
+
+
+
+```
+apiVersion: v1
+kind: ReplicationController 
+metadata:
+  name: myaap-rc
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  template: 
+    metadata:  #여기서부터 ---------------------------------
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+      spec:
+        containers:
+        - name: nginx-container
+          image: nginx #여기까지가 pod관련 내용임 -----------
+  replicas:  3 ### spec섹션의 자식임
+```
+
+- 이런식으로 pod가 뜨면 pod의 이름이 myaap-rc-11jhdf 이런식으로 뜬다는걸 기억해두자
+
+
+### 23.4. 레플리케이션 컨트롤러 보는 명령어
+```
+kubectl get replicationcontroller
+```
+
+
+
+### 23.5 Replica Set 과 Replication Controller
+- 둘이 용도는 같지만 완전 똑같은건 아니다.
+- controller는 old 기술로 점점 Replica Set으로 대체 되고있다.
+
+
+
+### 23.6 replica set 만드는 법을 알아보자
+- 역시나 아래 4가지 섹션이 기본 틀이다
+```
+apiVersion:
+kind:
+metadata:
+
+
+spec:
+```
+
+- apiVersion : 래플리카셋은 apps/v1임
+
+
+```
+apiVersion: apps/v1
+kind: ReplicaSet 
+metadata:
+  name: myaap-replicaset
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  template: 
+    metadata:  #여기서부터 ---------------------------------
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+      spec:
+        containers:
+        - name: nginx-container
+          image: nginx #여기까지가 pod관련 내용임 -----------
+  replicas:  3 ### spec섹션의 자식임
+```
+
+- 이제 여기서 컨트롤러와 셋의 차이점이 생긴다
+- 래플리카셋은 selector라는걸 넣어줘야한다.
+- 셀렉터는 래플리카셋으로 놓인 pod를 식별할수 있게 해줌
+- 템플릿에서 pod 정의를 했는데 왜 또함?
+- 사실 래플리카셋은 스스로 만들지 않은 pod도 관리할 수 있기 때문임 ㅇㅇ
+- 셀렉터와 matchLabels를 넣어주면 어떤 pod를 감시할지 알려준다.
+- 만약에 matchLabels에 맞는 pod가 미리 떠있으면 새로 pod를 띄우지 않는다.
+- 하지만 기존의 pod가 죽거나 할때 새로 띄울때는 template에 있는걸 보고 띄운다.
+
+```
+apiVersion: apps/v1
+kind: ReplicaSet 
+metadata:
+  name: myaap-replicaset
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  template: 
+    metadata:  #여기서부터 ---------------------------------
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+      spec:
+        containers:
+        - name: nginx-container
+          image: nginx #여기까지가 pod관련 내용임 -----------
+  replicas:  3 ### spec섹션의 자식임
+  selector: 
+    matchLabels:
+      type: front-end
+```
+
+
+### 23.7. 래플리카셋 보는 명령어
+```
+kubectl get replicaset
+```
+
+
+### 23.8 레플리카 갯수를 update하는 방법
+1) yaml파일에 숫자 바꿔준다. 그런다음에
+```
+kubectl replace -f replicaset.yaml
+```
+
+2) kubectl 사용 1
+```
+kubectl scale --replicas=6 -f replicaset.yaml
+```
+
+3) kubectl 사용 2
+- 아래의 replicaset은 타입이고
+- myapp-replicaset은 name임
+```
+kubectl scale --replicas=6 replicaset myapp-replicaset
+```
+
+
+### 23.9 래플리카 이미지를 바꾸는 방법
+```
+kubectl edit replicaset <래플리카셋 이름>
+```
+
+- 그런다음에  기존에 있던 파드를 지움, 그러면 새로뜸
+- 파드수 변경같은거도 kubectl edit으로 가능하다 이경우엔 파일 수정후 나가면 알아서 반영됨
+
+
+
+---
+## 시험팁
+- yaml 파일을 그냥 쓰는건 너무 힘들다.
+- kubectl run 을 써보자
+- 그러면 yaml 만드는걸 도와준다.
+- nginx pod를 만드는 법
+```
+kubectl run nginx --image=nginx
+```
+- pod yaml만드는법 (pod를 실제로 띄우진 않음)
+```
+kubectl run nginx --image=nginx --dry-run=client -o yaml
+```
+
+- deployment만드는법
+```
+kubectl create deployment --image=nginx nginx
+```
+- deployment yaml 만드는법
+```
+kubectl create deployment --image=nginx nginx --dry-run=client -o yaml
+```
+- 파일로 저장까지
+```
+kubectl create deployment --image=nginx nginx --dry-run=client -o yaml > nginx-deployment.yaml
+```
+
+- v1.19이후부터는 --replicas옵션이 생김
+```
+kubectl create deployment --image=nginx nginx --replicas=4 --dry-run=client -o yaml > nginx-deployment.yaml
+```
+
+- scale
+```
+kubectl scale deployment nginx --replicas=4
+```
+
+- redis-service라는 이름의 ClusterIP만들기
+```
+kubectl expose pod redis --port=6379 --name redis-service --dry-run=client -o yaml
+```
+
+- 아니면
+```
+kubectl create service clusterip redis --tcp=6379:6379 --dry-run=client -o yaml
+```
+
+
+- 노드 포트 만들기
+```
+kubectl expose pod nginx --type=NodePort --port=80 --name=nginx-service --dry-run=client -o yaml
+```
+- 아니면
+```
+kubectl create service nodeport nginx --tcp=80:80 --node-port=30080 --dry-run=client -o yaml
+```
+
+
+
+- redis라는 이름의 redis:alpine이미지를 사용하는 tier=db레이블을 가지고있는 파드 생성
+```
+kubectl run redis --image=redis:alpine --labels="tier=db"
+```
+
+
+- webapp이라는 이름의 kodekloud/webapp-color 이미지를 이용하는 replicas가 3인 deployment 만들기
+```
+kubectl create deployment webapp --image=kodekloud/webapp-color --replicas=3
+```
+
+
+- pod를 만든다. pod이름은 custom-nginx, 이미지는 nginx, 8080포트를 노출
+```
+kubectl run custom-nginx --image=nginx --port=8080
+```
+
+
+- dev-ns라는 네임스페이스를 만든다
+```
+kubectl create namespace dev-ns
+```
+
+
+- deployment 생성, 이름은 redis-deploy, 이미지는 redis, 네임스페이스 dev-ns, replicas는 2
+```
+kubectl create deployment redis-deploy --image=redis --namespace=dev-ns --replicas=2
+```
+
+
+
+
+---
+
+
+## 24. Deployment
+- 래플리카셋에서 배웠던건 잠시 잊자
+
+- 파드가 여러개 있는데 업그레이드를 하거나 배포를 해야할때
+- 한번에 교체하는것이 아니라, 하나씩 교체하는게 좋을때가 있다.
+- 그리고 배포를 롤백하는 기능도 있으면 좋다.
+
+- 뭐이런 류의 기능을 하는것이 디플로이먼트
+- 래플리카 셋을 감싸는 개념이다.
+
+### 24.1 deployment를 만들자
+- 래플리카 셋 yaml이랑 되게 비슷하다.
+- deployment를 create하면 replicaset도 자동적으로 만들어진다.
+```
+apiVersion: apps/v1
+kind: Deployment 
+metadata:
+  name: myaap-deployment
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  replicas:  3
+  selector: 
+    matchLabels:
+      type: front-end
+  template: 
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+      spec:
+        containers:
+        - name: nginx-container
+          image: nginx
+```
+
+
+
+---
+
+## 25. Service
+
+- 애플리케이션을 다른 애플리케이션 또는 사용자와 연결하는데 도움을 줌
+- 내부의 pod까리 통신을 도와주고
+- 외부로 포트를 열어줘 외부의 요청을 받을 수 있게 해줌 (노드포트 서비스라고 함)
+
+
+### 25.1 서비스 타입
+1)  NodePort
+2) ClusterIP
+3) LoadBalancer
+
+### 25.2 NodePort (노드포트 설명 장표 그림이 있으면 좋음)
+- 타겟 포트 : 실제 pod에서 사용하는 포트
+- 포트 : 서비스에서 pod와 연결되는 포트
+- 노트포트 : 외부에 열려있는 포트 (범위 : 30000~32767)
+- 단일노드위에 단일pod든, 단일 노드위에 다중 pod든, 다중 노드위의 다중 pod든 서비스는 정확히 똑같이 생성됨.
+- pod를 제거하거나 추가하면 알아서 service도 업데이트됨
+
+
+### 25.2 서비스를 생성해보자
+
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-service
+spec:
+  type: NodePort
+  ports:
+  - targetPort: 80
+    port: 80
+    nodePort: 30008
+```
+- 타겟포트를 적지않으면 그냥 port랑 같다고 생각함
+- 노드포트를 적지않으면 자동으로 할당됨 (범위 : 30000~32767)
+- 느꼈겠지만 서비스를 생성할때는 pod를 명시해주지 않음 걍 타겟포트만 알려줌
+- 그래서 셀렉터를 추가해줌!!!
+
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-service
+spec:
+  type: NodePort
+  ports:
+  - targetPort: 80
+    port: 80
+    nodePort: 30008
+  selector:
+    app: myapp
+    type: front-end
+```
+
+
+
+
+
+## 25.3 ClusterIP
+- frontend / backend / DB등의 파드가 따로따로 띄어있다고 생각해보자
+- 각각 pod끼리 통신해야한다.
+- 각각 pod가 3개씩 있다고 할때 frontend는 어떤걸로 backend를 호출해야할까
+- backend 파드 3개중 하나를 선택해야하기도하고 각 파드는 언제든 사라질수있어서 할당된 ip가 바뀔수도있다.
+- 그래서 예를 들어 백엔드 파드를 위해 만든 서비스는 모든 백엔드 파드를 하나로 묶어 다른 파드가 이 서비스에 접근하도록 한다
+
+
+## 25.4 만들어 보자
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: back-end
+spec:
+  type: ClusterIP
+  ports:
+  - targetPort: 80
+    port: 80
+  selector:
+    app: myapp
+    type: back-end
+```
+
+
+
+## 25.5 LoadBalancer
+
+- 파드가 여러개 있고 이걸 외부에서 접근하게 해주는 nodeport가 있다고 생각해보자
+- 그럼 노드 수만큼 ip가 생성된다.
+- 하지만 유저에게는 단일화된 endpoint가 필요하다.
+- 이걸위해 LoadBalancer를 하나 구축하면 되는데 aws나 에저등등 클라우드 플랫폼은 그들의 로드밸런서 서비스가 있을거다
+- k8s는 그것들을 지원하니 그걸 위해 구성하면 된다.
+- 따라서 아래 yaml은 지원을 하는 클라우드 플랫폼에서만 작동한다.
+
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: back-end
+spec:
+  type: LoadBalancer
+  ports:
+  - targetPort: 80
+    port: 80
+    nodePort:30008
+```
+
+
+### 25.6 타겟포트 알아보는법
+```
+kubectl describe svc <서비스이름>
+```
+
+
+
+
+
+---
+## 26. Namespace
+- 네임스페이스 지정해서 get pod할때
+```
+kubectl get pods --namespace=kube-system
+```
+
+- 네임스페이스 지정해서 create하고싶을때
+```
+kubectl create -f <yaml파일명>.yaml --namespace=dev
+```
+
+
+- 그냥 yaml파일에 넣어주고 싶을때는 metadata안에 넣어줌
+
+```
+apiVersion: v1
+kind: Pod
+metadata: 
+  name: myapp-pod
+  namespace: dev
+  labels:
+    app: myapp
+     type: front-end
+spec:
+  containers:
+  - name: nginx-container
+    image: nginx
+```
+
+### 26.1 네임스페이스를 새로 만들고싶을때
+1) yaml로 생성
+
+```
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+```
+```
+kubectl create -f <파일명>.yaml
+```
+
+2) kubectl 이용
+```
+kubectl create namespace <ns이름>
+```
+
+### 26.2 모든 네임스페이스의 파드가 보고싶을때
+```
+kubectl get pods --all-namespaces
+```
+
+### 26.3 네임스페이스에 리소스를 제한하고싶을떄
+- Resource Quota를 이용한다.
+```
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: dev
+spec:
+  hard:
+    pods: "10"
+    requests.cpu: "4"
+    requests.memory: 5Gi
+    limits.cpu: "10"
+    limits.memory: 10Gi
+```
+```
+kubectl create -f <파일명>.yaml
+```
+
+
+
+
+---
+## 27. Imperative(명령형) VS Declarative(선언형)
+
+---
+## 28.  kubectl apply는 어떻게 동작할까?
+
+
+
+---
+
+
+# 여기서 부터 스케쥴링 섹션
+
+
+## 29. 매뉴얼 스케쥴링
+- 노드를 수동으로 스케쥴링하는걸 배울거임
+- 스케쥴러는 어떻게 작동할까?
+  - 사실 모든 pod yaml에는 nodeName항목(spec의 자식)이 있는데 기본값이 아님
+  - k8s가 자동으로 추가함 (스케쥴링 알고리즘을 통해)
+- 스케쥴러가 없다면? pod가 계속 팬딩상태에 머물게됨
+- 그럼 그냥 수동으로 node에 pod를 할당하면 된다.
+  1) 방법 1 : 생성할때 yaml에 nodeName를 지정해줌
+  2) 방법 2 : 만약에 이미 띄워져 있는 파드에 node를 지정해주려면 바인딩 개체를 생성하고 포드의 바인딩 api에 요청한다. (스케쥴러가하는거임)
+
+
+
+---
+
+## 30. Label & Selector
+- 레이블을 이용해 이것저것 분류함
+- 그리고 셀렉터를 사용해서 레이블필터링을 할수있음
+- 예를들어
+```
+kubectl get pods --selector app=App1
+```
+
+
+
+
+---
+
+## 31. 테인트 & 톨러레이션
+
+- 노드와 pod의 관계를 알아봄, 그리고 노드에 어떤 포드를 배치할지, 어떻게 제한할 수 있는지 알아봄
+- 벌레가 사람한테 다가오는걸 막기 위해 스프레이를 뿌리는걸  생각하자
+- 하지만 이 냄새를 잘 버티는 벌레가 있을수 있음
+- 벌레가 사람몸에 앉는걸 결정하는건 두가지임
+  1) 사람의 테인트
+  2) 벌러의 톨러레이션 레벨
+- 여기서 사람은 노드, 벌레는 pod임
+- 테인트와 톨러레이션은 노드에 파드를 스케쥴링 할때 쓰임
+  -.
+- 1~3노드가 있고 a~d파드가 있는데 노드1에 전용리소스가 있다고 생각해보자
+- 그러면 1번 노드에 테인트를 걸어둔다(스프레이 뿌린다고 생각하자)
+- 그럼 a~d파드 모두 노드1에 올라갈 수 없다.
+- 이때 특정 파드만 띄우게 하려면 어떻게 함?
+- 만약 D를 1에 놓고싶다면 D에다가 수용력을 높이는 행동을 취함
+- 그럼 D에는 1에 올라갈수 있는 톨러레이션이 생김
+- 그럼 D만 1에 올라가고 나머지는 2-3에 알아서 올라감
+- 그런데!!!! D를 무조건 1에 올리겠다는게 아니다. 1에는 D만 올라올수 있다는 말이다.
+- D는 2,3에 들어갈 수있다.
+- D를 1번에만 넣을수 있게하는건 Node Affinity라고 한다. 다른개념이다.
+
+### 31.1 이걸 하는 방법은 어떻게됨?
+- 노드를 테인트 하려면
+```
+kubectl taint nodes <노드이름> key=val:taint-effect
+```
+
+### 31.2 taint-effect
+- 테인트를 못참았을때 어떤일이 생기는지 정해줌
+- 세가지가 있다
+  1) NoSchedule : 이 노드에 그 파드를 올리지 않음
+  2) PreferNoSchdule : 파드를 올리지 않는걸 선호하는데 어떻게 될지 모름
+  3) NoExecute : ?? 잘 이해를 못함 나중에 알아보자
+
+- 예
+```
+kubectl taint nodes node1 app=blue:NoSchdule
+```
+
+
+### 31.3 파드에 톨러레이션 추가
+- 만약 아래와 같이 테인트를 생성했다면
+```
+kubectl taint nodes node1 app=blue:NoSchdule
+```
+- POD에 톨러레이션은 아래와 같이 넣어준다.
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+spec:
+  containers: 
+  - name: nginx-container
+    image: nginx
+  tolerations:
+  - key: "app"
+    operator: "Equal"
+    value: "blue"
+    effect: "NoSchedule"
+```
+
+### 31.4 마스터노드도 사실은 노드다!
+- 근데 왜 스케쥴러는 어느 파드도 마스터 노드에 스케줄링 하지 않을까?
+- k8s가 처음 설정될떄 마스터노드에 테인트 설정이 자동으로 되기 때문! 
+
+
+### 31.5 테인트 삭제
+- controlplane의 
+- Taints:             node-role.kubernetes.io/control-plane:NoSchedule
+- 를 삭제해보자
+
+```
+kubectl taint nodes controlplane node-role.kubernetes.io/control-plane:NoSchedule-
+```
+
+
+---
+## 32. Node Selectors
+- 노드가 서로 다른 크기 일수있다.
+- 특정노드에서만 작동할 수 있도록 파드의 한계를 설정해야한다.
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+spec:
+  containers: 
+  - name: data-processor
+    image: data-processor
+  nodeSelector:
+    size: Large #이거 Large는 노드에 레이블로 size=Large이렇게 붙여진거임
+```
+
+### 32.1 여기서 잠깐! 레이블은 어떻게 붙일까?
+```
+kubectl label nodes <노드이름> <레이블키>=<레이블벨류>
+```
+
+### 32.2 노드셀렉터의 한계
+- 복잡한 요구사항이라면 좀 어렵다.
+- 예를들어 Large or Medium을 선택해라 도 안되고
+- Not Small을 선택해라 도 안된다.
+
+
+
+---
+## 33. Node Affinity
+- 파드가 특정 노드에 호스트 될 수 있도록 하는것임
+- 노드 셀렉터로 이걸 해보려 했지만
+- 노드 셀렉터는 복잡한 조건을 못 건다.
+- 노드 어피니티는 특정 노드에 파드 배치를 제한하는 고급 기능을 제공한다.
+
+- 헐 근데 개복잡함. 따라 적기도 벅참
+- 특히 Node Affinity Type이 엄청 긺
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+spec:
+  containers: 
+  - name: data-processor
+    image: data-processor
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: size
+            operator: Exists
+```
+- 다른 샘플(Lab에 나온거임)
+```
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      run: nginx
+  template:
+    metadata:
+      labels:
+        run: nginx
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: color
+                operator: In
+                values:
+                - blue
+```
+
+### 33.1 Node Affinity Type
+- 겁나 길다
+- 예를 들어 'requiredDuringSchedulingIgnoredDuringExecution'
+
+
+
+---
+## 34. Node Affinity VS 테인트 & 톨러레이션
+- 상황설명 : 
+- 노드5개 (빨노파 회회) 있고
+- 파드 5개 있따 (빨노파 회회)있다
+- 각각에 색깔에 맞추어 할당되어야 한다.
+
+### 34.1 이걸 테인트&톨러레이션으로 해결해보자
+1) 노드에 빨노파 표시를 한다. (회색은 Other라고 생각한다.)
+2) 그다음에 파드에 톨러레이션을 빨노파 해준다.
+3) 그런데 이건 꼭 같은 색깔에 들어간다는 보장이 없다.
+4) (내생각: 그럼 회색에도 테인트&톨러레이션 걸어주면 되는거 아닌가??)
+
+## 34.2 노드 어피니티로 해결해보자
+1) 노드에 레이블을 붙인다. 빨노파
+2) 그다음에 파드에 노드셀렉터를 붙인다.
+3) 이경우 빨노파 파드가 각각의 노드에 잘 붙는다.
+4) 그런데 회색(Other)파드가 빨노파 노드에 붙을수가있다.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
