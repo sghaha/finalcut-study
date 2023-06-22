@@ -623,6 +623,11 @@ kubectl create deployment redis-deploy --image=redis --namespace=dev-ns --replic
 ```
 
 
+- 데몬셋 만들기
+```
+kubectl create deployment elasticsearch --image=registry.k8s.io/fluentd-elasticsearch:1.20 -n kube-system --dry-run=client -o yaml > fluentd.yaml
+```
+
 
 
 ---
@@ -1202,11 +1207,443 @@ spec:
 
 
 
+---
+## 37. 데몬셋
+- 각 노드에 하나씩 파드를 띄울때 좋다.
+- 노드가 추가되면 알아서 추가되고
+- 노드가 삭제되면 알아서 삭제된다.
+- kube-proxy같은걸 데몬셋으로 배포하면좋다
+
+### 37.1 데몬셋 만드는 법
+- 레플리카 셋 만들때랑 비슷하다
+```
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: monitoring-deamon
+spec:
+  selector:
+    matchLabels:
+      app: monitoring-agent
+    template:
+      metadata:
+        labels:
+          app: monitoring-agent
+      spec:
+        containers:
+        - name: monitoring-agent
+          image: monitoring-agent
+```
+
+
+
+### 37.2 데몬셋은 어떻게 작동하는가? (v1.12 까지)
+- 각 파드가 생성되기 전에 nodeName으로 각 노드 이름을 정해준다.
+- 생성되면 각각의 노드에 할당된다.
+
+### 37.3 그 이후에는 어떻게 작동하는가?
+- 1.12부터는 노드어피니티와 디폴트 스케쥴러를 이용한다.
+
+
+
+---
+## 40. Static Pods
+- 큐블렛은 컨트롤 플레인에게 명령을 받아 행동하는데
+- 컨트롤플레인이 없어지면 어떻게 될까?
+
+### 40.1 컨트롤플레인 없이 파드를 생성하는법(Static PODs)
+- 파드 생성 yaml을
+- 원래 컨트롤 플레인이 yaml파일을 저장하는곳에 수동으로 저장시킨다
+- /etc/kubernetes/manifests : 이거 --pod-manifest-path 옵션에 저장되어있는 값이라함 (kubelet.service)
+- 그럼 큐블렛이 이 파일을 주기적으로 확인하고 파드를 생성한다.
+- 생성뿐만아니라 파드의 생존도 보장함
+- 파일을 삭제하면 파드도 삭제됨
+- 우린 이걸 static pod라고 부르기로 했어요
+- 이방법으로는 pod만 생성할수 있음 다른건 생성못함
+- 스태틱 파드는 파드 명에 -<노드명>이 붙는다!!!!!!!!!!!!!!!!!
+
+### 40.1.1 static pod의 yaml파일이 저장되는곳을 알고싶다.
+1) 아래 명령어를 쳤을때 나오는 yaml 경로가 있다.
+```
+ps -aux | grep /usr/bin/kubelet
+ ```
+2) 그 경로의 파일을 살펴본다
+```
+cat /var/lib/kubelet/config.yaml
+```
+3) 그럼 staticPodPath 항목에 적혀있다.
+
+
+### 40.2 Static PODs는 컨트롤 플레인이 인지할수있는가?
+- (이제 컨트롤 플레인이 없다는 가정을 제외함)
+- 그렇다. 스태틱 파드를 만들어도 kubectl get pod하면 뜬다
+- 근데 읽을수만 있다.
+- 수정하거나 삭제하려면 manifests 폴더에 있는 yaml파일을 수정해야한다.
+
+
+### 40.3 스태틱 파드 왜씀?
+- kube-system같은 컨트롤플레인 관련된걸 꾸리기 위해한다는듯
+- kube-system 네임스페이스로 띄워진 파드중에서도, 아래 명령어 날려서 name끝에 `-controlplane`이 붙은게 진짜 스태틱 파드인듯
+```
+kubectl get pod --all-namespaces -o wide
+```
+
+
+
+
+### 40.4 스태틱 파드 vs 데몬셋
+
+스태틱 파드                                               데몬셋
+큐블렛이 생성함                                        kube-api서버가 생성함(DaemonSet Controller)
+컨트롤플레인의 구성요소를 배포함           모니터링 에이전트, 로깅 에이전트 등등을 배포함
+둘다 :::::: kube-scheduler랑 관련없음 무시당함
 
 
 
 
 
+
+
+---
+
+
+
+## 41.  멀티플 스케쥴러
+
+- 디폴트 스케쥴러 이외의 스케쥴러를 여러개 둘수 있다.
+
+
+
+
+
+
+
+
+----
+## 42. 스케쥴러 프로파일
+
+- 스케쥴링 되는 순서
+  1) 스케쥴링되어야하는 파드들이 스케쥴링 큐에 들어간다.
+  2) 필터링 한다 (요청 스펙과 노드에 남아있는 공간등을 보고)
+  3) 스코어링을 한다.
+  4) 스코어링은 파드를 배치하고 난다음에 남은 공간이 얼마나 되는지를 기준으로 한다.
+  5) 바인딩힌다. 가장 높은 점수를 가진 노드에 바인딩
+
+- 이 모든 작업은 플러그인으로 이루어짐
+
+
+
+
+
+
+---
+
+# 여기부터 로깅 & 모니터링
+
+## 43. 모니터 클러스터 컴포넌트
+- 어캐 모니터링할까?
+- 그럼 뭘 모니터링할까?
+- 각각의 파드 개수 파드 성능, cpu등등 의 매트릭을 모니터링한다
+- 사실 k8s에는 이런 기능이 없다.
+- 하지만 오픈소스 솔루션이 많다. 프로메타우스, 일레스틱 스택, 데이터도그, 다이나트래이스 등등
+
+
+
+### 43.1 메트릭서버
+- 메트릭서버는 k8s클러스터당 하나가 있다.
+- 노드와 포드에서 메트릭틀 회수한다. 그런다음에 저장한다.
+- 매트릭 서버는 인메모리 솔루션임. 디스크에 데이터를 저장하지않음
+
+- 큐블렛에는 cAdvisor라는 것이 있는데 이게 파드에서 메트링을 회수하고 매트릭서버한테 줌
+
+
+### 43.2 설치
+1) 깃 클론하고 (url을 못적었다...젠장)
+2) 받은 디렉토리에 들어가서
+```
+kubectl apply -f .
+```
+
+
+
+### 43.2 상태 확인하는법
+- 노드
+```
+kubectl top node
+```
+- 파드
+```
+kubectl top pod
+```
+
+## 44. Application Logs
+- 파드 로그 찍기
+```
+kubectl logs -f <파드명>
+```
+- 만약 하나의 파드에 여러개의 이미지 컨테이너가 있다면
+```
+kubectl logs -f <파드명> <컨테이너명>
+```
+
+
+
+---
+# 여기서부터 Application 라이프사이클 섹션
+
+## 45.
+
+### 45.1 롤아웃 커맨드
+```
+kubectl rollout status deployment/myapp-deploy
+```
+
+- 배포 취소
+```
+kubectl rollout undo deployment/myapp-deployment
+```
+
+### 45.1 배포 전략
+1) 롤링 업데이트
+  - 디폴트 배포전략
+  - 새로뜨는거는 새 레플리카셋에 뜨는거임
+  -  롤백하면 원래 있던 레플리카 셋을 씀(업데이트 하기 전부터 쓰던거)
+2)
+
+
+
+
+---
+## 시험팁 2
+- 있는 deployment수정하기
+```
+kubectl edit deployment <디플로이먼트명>
+```
+
+---
+
+## 46.  커맨드
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-sleeper-2
+spec:
+  containers:
+  - name: ubuntu
+    image: ubuntu
+    command:
+    - sleep
+    - "5000"
+
+```
+
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp-green
+  labels:
+    name: webapp-green
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    command: ["pyhton","app.py"]
+    args: ["--color", "pink"]
+```
+
+- command와 args가 좀 헷갈리는데 나중에 알아보자
+- command는 Dockerfile의 ENTRYPOINT와,
+- args는 Dockerfile의 CMD와 대응한다.
+
+
+---
+
+## 47. k8s 환경변수
+
+### 47.1 Plain Key Value
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp-green
+  labels:
+    name: webapp-green
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    ports:
+    - containerPort: 8080
+    env:   ###----------------------------이게 환경변수 부분임
+    - name: APP_COLOR
+      value: pink
+```
+
+### 47.2 ConfigMap을 이용하는 경우
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp-green
+  labels:
+    name: webapp-green
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    ports:
+      - containerPort: 8080
+    envFrom:   ###----------------------------이게 환경변수 부분임
+      - configMapRef:
+          name: <configmap 이름>
+```
+- 근데 이거 Lab에서는 잘 안먹히고 다른방식으로 헀다. 나중에 랩 찾아보자
+
+### 47.3 SecretKey를 이용하는 경우
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp-green
+  labels:
+    name: webapp-green
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    ports:
+    - containerPort: 8080
+    envFrom:   ###----------------------------이게 환경변수 부분임
+    - secretRef:
+        name: <시크릿이름>
+
+
+```
+
+### 47.4 configMap
+- 환경변수가 늘어나면 관리하기 힘들다
+
+1) 컨피그맵을 만들고
+2) 파드에 주입한다.
+
+
+### 47.5 configMap만들기
+
+#### 1) 명령어로 만들기
+```
+kubectl create configmap \
+<컨피그 이름> --from-literal=<key>=<value>
+
+
+```
+- 예시
+```
+kubectl create configmap \
+app-config --from-literal=APP_COLOR=blue
+```
+
+
+####  2) 명령어로 만드는데 파일옵션이용하기
+```
+kubectl create configmap \
+<컨피그 이름> --from-file=<path-to-file>
+```
+
+
+#### 3) 선언적으로 만들기
+- yaml파일 만들고
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APP_COLOR: blue
+  APP_MODE: prod
+```
+- 만들기 요청
+```
+kubectl create -f <파일명>
+```
+
+
+
+
+### 47.5 Secret
+- 컨피그맵에 DB의 endpoint와 passwd같을걸 저장하는건 좋지 않다.
+- 시크릿은 암호화 한다. 그거 빼고는 configmap이랑 비슷하다고 보면됨
+
+- 이것도 configmap이랑 비슷하게 명령형으로 만드는게 있고 선언형으로 만드는게 있다.
+- 명령형은 귀찮으니 선언형만 메모한다.
+
+#### 1) 선언적으로 만들기
+- yaml파일
+
+```
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+data:
+  DB_Host: mysql
+  DB_User: root
+  DB_Password: passwd
+```
+
+- 근데 이렇게 yaml파일을 만들면 결국 정보가 노출되니까
+- 값들을 웬만하면 인코딩해야한다.
+
+
+- 리눅스 명령어를 활용해서 인코딩한 값을 넣자
+```
+echo -n '<나의 패스워드>'  | base64
+```
+
+
+- 적용
+```
+kubectl apply -f 000.yaml
+```
+
+- 정보 추출
+```
+kubect get secret <시크릿이름> -o yaml
+```
+
+
+- 리눅스 명령어를 활용해서 인코딩한 값 디코딩하자
+```
+echo -n '<인코딩값>'  | base64 --decode
+```
+
+- ***중요*** 시크릿은 암호화된게 아니라 인코딩된거다 남들이 볼수있다는점을 알아야한다.
+- 깃헙에 푸시할때 조심하자
+- 시크릿은 etcd에 암호화되어있지 않다
+- 다른 네임스페이스에서도 access가능하다 (즉 다른팀원이 볼수도있다) 그래서 롤기반엑세스컨트롤(RBAC)를 구성해야한다.
+- 그냥 aws나 다른 프로바이더의 서비스를 이용하는게 더 좋다.
+
+
+
+#### secret관련 명령어
+- secret확인
+```
+kubectl get secrets
+```
+
+
+
+
+
+
+# 로그보기
+```
+kubectl -n elastic-stack exec -it app -- cat /log/app.log
+```
 
 
 
