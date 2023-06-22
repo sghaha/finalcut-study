@@ -536,6 +536,8 @@ kubectl edit replicaset <래플리카셋 이름>
 
 ---
 ## 시험팁
+- alias k=kubectl 
+- 하면 편함
 - yaml 파일을 그냥 쓰는건 너무 힘들다.
 - kubectl run 을 써보자
 - 그러면 yaml 만드는걸 도와준다.
@@ -1420,6 +1422,19 @@ kubectl rollout undo deployment/myapp-deployment
 kubectl edit deployment <디플로이먼트명>
 ```
 
+- 파드 수정하려고 
+```
+kubectl edit po <파드명>
+```
+한다음에 저장하고 나오니까 에러날때
+
+- 아래와 같이 강제로 바꾸자
+```
+kubectl replace --force -f /tmp/kubectl-edit-123091823.yaml
+```
+
+
+
 ---
 
 ## 46.  커맨드
@@ -1629,7 +1644,7 @@ echo -n '<인코딩값>'  | base64 --decode
 
 
 
-#### secret관련 명령어
+### 47.6 secret관련 명령어
 - secret확인
 ```
 kubectl get secrets
@@ -1646,33 +1661,184 @@ kubectl -n elastic-stack exec -it app -- cat /log/app.log
 ```
 
 
+---
+
+## 48. Init Container
+- https://codecollector.tistory.com/1281
+- pod의 app container들이 실행되기 전에 실행되는 특수한 container
+- app image는 없는 utility, 설정 script등을 포함할 수 있습니다.
+
+
+### 48.1  일반 container와 차이점
+- 초기화 컨테이너는 앱 컨테이너의 리소스 상한(limit), 볼륨, 보안 세팅을 포함한 모든 필드와 기능을 지원합니다. 
+- 그러나, 초기화 컨테이너를 위한 리소스 요청량과 상한은 리소스에 문서화된 것처럼 다르게 처리됩니다.
+- lifecycle, livenessProbe, readinessProbe 또는 startupProbe 를 지원하지 않습니다. 
+- 왜냐하면 초기화 컨테이너는 파드가 준비 상태가 되기 전에 완료를 목표로 실행되어야 하기 때문입니다.
+- 만약 다수의 초기화 컨테이너가 파드에 지정되어 있다면, kubelet은 해당 초기화 컨테이너들을 한 번에 하나씩 실행합니다. 각 초기화 컨테이너는 다음 컨테이너를 실행하기 전에 꼭 성공해야 합니다. 모든 초기화 컨테이너들이 실행 완료되었을 때, kubelet은 파드의 애플리케이션 컨테이너들을 초기화하고 평소와 같이 실행합니다
+
+
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webapp-green
+  labels:
+    name: webapp-green
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    ports:
+    - containerPort: 8080
+  initContainers:
+  - command:
+    - sh
+    - -c
+    - sleep 600
+    image: busybox:1.28
+    name: warm-up-1
+```
+
+
+
+---
+
+
+# 클러스터 Maintenance
+- 어떻게 운영체제를 업그레이드 할지 이때 노드를 잃으면 어떤 결과가 나오는지 알아보고
+- 클러스터 업그레이드 과정을 알아본다.
+- 백업과 재난복구 시나리오를 연습해본다.
+
+
+## 49. os 업그레이드
+- 노드가 클러스터에서 벗어나면 그 노드의 pod에 접근이 불가능해진다. 
+- 바로 복귀하면 약간의 해프닝으로 끝남
+- 그러나 5분동안 벗어나면 해당노드에서 파드가 종료된다.
+- 그럼 레플리카셋에 묶여있는 파드는 노드에 파드가 띄워짐, (레플리카 셋에 없었던 파드는 그냥 죽어있음)
+- 이때 다시 그 노드가 돌아오면 그냥 빈 노드가 됨
+- 레플리카 셋에 없었던 파드가 증발해버리는거임!
+
+### 그래서 모든 작업의 노드를 의도적으로 드레인 할수 있음
+- 아래와 같이 하면 node-1의 파드들이 다른 노드로 이동함
+```
+kubectl drain node-1
+```
+- 데몬셋 무시할때
+```
+kubectl drain node01 --ignore-daemonsets
+```
+- 그러면 이때 os업그레이드를 한다
+- 다 하고 클러스터로 돌아왔을때 uncordon해야한다
+```
+kubectl uncordon node-1
+```
+
+- 이거 말고 cordon이라는 명령어도 있다.
+- 이건 기존 파드들을 내쫒지는 않고 스케쥴링에만 제거한다.
+
+
+---
+## 50. k8s version 업그레이드
+- kube-apiserver, controller-manager, kube-scheduler, kubelet, kube-proxy, kubectl등 각각의 버전이 따로 있다.
+- 구성요소들은 각각 다른 버전일 수도있다.
+- 단 kube-apiserver는 짱짱맨이라 다른것들의 버전이 kube-apiserver버전 보다 높을 수는 없다.
+
+- kube-apiserver가 버전 x라면
+- 한단계 아래인 controller-manager와 kube-scheduler는 x-1버전까지 할수있고
+- 또 한단계 아래인 kubelet과 kube-proxy는 x-2버전까지 할 수 있다. 
+- 하지만 kubectl은 x+1부터 x-1까지 된다.
+
+
+#### 버전은 한꺼번에 올리는것보다 하나씩 올리는걸 권장한다.
+
+## 51. 업그레이드 과정
+1) 마스터 노드를 업그레이드 하고 워커노드를 업그레이드한다.   
+마스터노드가 업그레이드 되는동안 api-server, 스케쥴러같은건 잠깐 다운된다.   
+이때 노드에 떠있는 파드들은 원래대로 서비스 된다.
+2) 마스터노드가 업그레이드 완료되면 워커노드랑 마스터노드는 버전이 한개 차이난다.   
+이건 지원되는 구성임
+3) 이제 워커노드를 업그레이드 할차례
+4) 몇가지 전략이 있다. 첫번째 : 한번에 업그레이드 - 이건 서비스가 중단됨
+5) 두번째 : 한번에 노드 하나씩 
+6) 세번째 : 새 버전으로 새 노드를 추가해서 옮김
+
+
+## 52. kubeadm 으로 업그레이드 해보자
+- k8s공식 홈피 가는게 더 정확하다. 아래꺼 잘안됐었다...
+- 아래 명령어 치면 많은 정보를 얻을 수 있음
+```
+kubeadm upgrade plan
+```
+- 현재 클러스터 버전, 현재 컴포넌트 버전, 업그레이드 할수 있는 latest stable 버전 등등을 알 수 있다.
+- 참고: 큐블렛은 kubeadm이 업그레이드 해주지 않는다. 나중에 수동으로 업그레이드 해야함
+- 그리고 아래와같은 커맨드를 알려줌
+```
+kubeadm upgrade apply v1.13.4
+```
+
+1) 일단 kubeadm을 현재 클러스터보다 딱 한 마이너 버전 높은걸로 바꿔준다.
+```
+apt-get upgrade -y kubeadm=1.12.0-00
+```
+2) 업그레이드 한다.
+```
+kubeadm upgrade apply v1.12.0
+```
+3) 이때 kubectl get node했을때 업그레이드 안된것처럼 보일수도있는데   
+그건 큐블렛 버전이 안올라가서 그런것이다. (컨트롤플레인에 큐블렛이 있을수도있고 없을수도있긴함)
+
+4) 큐블렛을 업그레이드 한다.
+```
+apt-get upgrade -y kubelet=1.12.0-00
+```
+
+5) 큐블렛 리스타트
+```
+systemctl restart kubelet
+```
+
+6) 이제 마스터노드의 버전이 올라간것으로 보일것이다.
+
+7) 이제 워커노드를 업그레이드 해줘야한다.
+8) drain으로 하나의 노드를 비워준다
+```
+kubectl drain node-1
+```
+9) 마스터 노드에서 했던것처럼 kubeadm 업그레이드 해줌
+```
+apt-get upgrade -y kubeadm=1.12.0-00
+```
+11) 큐블렛 업그레이드
+```
+apt-get upgrade -y kubelet=1.12.0-00
+```
+
+
+12) 노드 config 업그레이드 한다.
+```
+kubeadm upgrade node config --kubelet-version v1.12.0
+```
+
+13) 큐블렛 리스타트
+```
+systemctl restart kubelet
+```
+14) 스케쥴러에 다시 등록
+```
+kubectl uncordon node-1
+```
+
+15) 남은 노드에도 하나씩 수행함
 
 
 
 
+## 54. 백업
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+### 54.1 대충 생각나는 백업해줘야하는것들
+1) 리소스 컨피그 파일
+2) etcd 클러스터
+3) Persistent Volumes
 
 
   
