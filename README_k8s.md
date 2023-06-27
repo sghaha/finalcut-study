@@ -1840,7 +1840,532 @@ kubectl uncordon node-1
 2) etcd 클러스터
 3) Persistent Volumes
 
+### 54.2 etcd 클러스터 버전 확인하는법
+```
+kubectl -n kube-system logs etcd-controlplane | grep -i 'etcd-version'
+```
+혹은
+```
+kubectl -n kube-system describe pod etcd-controlplane | grep Image:
+```
 
+
+### 54.3 etcd 클러스터 접근 url얻는 방
+```
+kubectl -n kube-system describe pod etcd-controlplane | grep '\--listen-client-urls'
+```
   
+### 54.4 etcd 서버 certificate file 위치 아는법 
+```
+kubectl -n kube-system describe pod etcd-controlplane | grep '\--cert-file'
+```
+
+
+### 54.5 ETCD CA Certificate file located
+```
+kubectl -n kube-system describe pod etcd-controlplane | grep '\--trusted-ca-file'
+```
+
+### 54.6 ETCD를 /opt/snapshot-pre-boot.db 에 백업해보자
+```
+ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 \
+--cacert=/etc/kubernetes/pki/etcd/ca.crt \
+--cert=/etc/kubernetes/pki/etcd/server.crt \
+--key=/etc/kubernetes/pki/etcd/server.key \
+snapshot save /opt/snapshot-pre-boot.db
+```
+
+- 해설
+```
+--endpoints: Optional Flag, points to the address where ETCD is running (127.0.0.1:2379)
+--cacert: Mandatory Flag (Absolute Path to the CA certificate file)
+--cert: Mandatory Flag (Absolute Path to the Server certificate file)
+--key: Mandatory Flag (Absolute Path to the Key file)
+```
+
+
+### 53.7
+- 마스터노드 업데이트 하고 온라인 상태가 되엇는데 다른 어플리케이션에 접근을 못한다고한다. 이유는 뭘까?
+- 확인하는법 : 일단 디폴트 네임스파이스의 deployments와 pod를 확인해보자
+- 확인해보니 아무것도 없네?
+- 리스토어를 안해서 그럼
+
+### 53.8 복원해보자
+```
+ETCDCTL_API=3 etcdctl  --data-dir /var/lib/etcd-from-backup \
+snapshot restore /opt/snapshot-pre-boot.db
+```
+
+### 53.9 Next, update the /etc/kubernetes/manifests/etcd.yaml:
+- 우리는 controlplane - /var/lib/etcd-from-backup 여기에 백업본을 가지고있다
+- 그래서 etcd.yaml을 수정해줘야한다.
+- 아래부분을 찾아서 수정하자
+- old directory (/var/lib/etcd) to the new directory (/var/lib/etcd-from-backup).
+```
+  volumes:
+  - hostPath:
+      path: /var/lib/etcd-from-backup
+      type: DirectoryOrCreate
+    name: etcd-data
+```
+- 이 파일이 업데이트되면 ETCD 포드는 /etc/kubernetes/manifests 디렉터리 아래에 배치된 정적 포드이므로 자동으로 다시 생성됩니다.
+
+```
+
+
+Note 1: As the ETCD pod has changed it will automatically restart, and also kube-controller-manager and kube-scheduler. Wait 1-2 to mins for this pods to restart. You can run the command: watch "crictl ps | grep etcd" to see when the ETCD pod is restarted.
+
+Note 2: If the etcd pod is not getting Ready 1/1, then restart it by kubectl delete pod -n kube-system etcd-controlplane and wait 1 minute.
+
+Note 3: This is the simplest way to make sure that ETCD uses the restored data after the ETCD pod is recreated. You don't have to change anything else.
+
+
+
+If you do change --data-dir to /var/lib/etcd-from-backup in the ETCD YAML file, make sure that the volumeMounts for etcd-data is updated as well, with the mountPath pointing to /var/lib/etcd-from-backup (THIS COMPLETE STEP IS OPTIONAL AND NEED NOT BE DONE FOR COMPLETING THE RESTORE)
+```
+
+
+
+
+---
+
+
+# 시큐리티
+
+## 60. 보안
+- k8s 관리자를 하다보면 인증서와 관련된 이슈에 직면한다.
+- 그리고 Authentication에 대해 논의하고
+- 마지막으로 네트워크 정책을 논의한다
+
+---
+## 61. k8s 보안 primitives
+- 패스워드 인증은 사용불가능하다, SSH key기반 인증만 k8s host에 접근가능
+
+### 61.1 kube-apiserver
+- 사실 이걸로 모든 작업을 수행할 수 있다.
+- 이게 1차 방어선임, api 서버 자체에 대한 액세스를 컨트롤 한다.
+- 두가지 결정을 내려야함.
+1) 누가 클러스터에 접근할 수 있을지
+2) 뭘 할수 있을지
+
+#### 61.1.1. 누가 클러스터에 접근할 수 있을까? :
+- 어센티케이션 메커니즘에 의해 정의됨
+- apiserver에 접근할 수 있는 다양한 방법이 있음 :
+1) files- username&passwd
+2) files - username&tokens
+3) certificates
+4) 외부 인증 프로파이더 (ex. LDAP)
+5) Service Accounts
+
+#### 61.1.2. 뭘 할 수있을까
+- 뭘 할 수 있는지 정의 해주는 방법
+1)  RBAC Authorization
+2) ABAC Authorization (Attribute based Access control)
+3) Node Authorization
+4) Webhook Mode
+
+
+### 61.2 TLS 인증
+- api-server, 스케쥴러, etcd 클러스터 등등 모든 통신에는 TLS 암호화가 적용된다.
+
+
+---
+
+## 62. Authentication
+- k8s는 리눅스처럼 유저를 만들거나 하지 않음
+- 외부 파일이나, 외부 인증프로파이더 등을 이용함
+- 그러나 서비스 어카운트는 k8s가 관리함 (kubectl create serviceaccount SA1 처럼 만들수 있다는 말, k get serviceaccount로 볼수도있음)
+
+
+### 62.1 일반 사용자 관점에서 일단 보자
+- api-server를 통해 클러스터에 접근
+- kube apiserver는 요청을 처리하기 전에 인증을 함
+
+### 62.2 그럼 kube apiserver는 어떻게 인증을 할까?
+1) static passwd file
+2) static token file
+3) certificates
+4) 외부 인증 프로토콜
+
+### 62.3 제일 간단한 Static passwd file 부터 이야기 해보자
+-  csv파일에 username과 passwd를 저장한다 (passwd, username, ID로 구성 되어있음)
+-  그럼다음에 kube-apiserver.service의 옵션으로 `--basix-auth-file=user-details.csv` 을 설정해두고 재시작하면 작동함
+-  kubeadm을 써서 구성했다면 yaml파일을 수정하면된다. 파일 수정되면 알아서 재시작한다.
+- curl를 이용해 접근하는 법
+```
+curl -v -k https://master-node-ip:6443/api/v1/pods -u "user1:passworkd123"
+```
+- csv파일 마지막 열에 group도 지정할 수 있다.
+- 그러나 권장하지 않는 방법
+
+
+### 62.4 토큰 파일 방식도 된다.
+- 이때의 옵션은 `--token-auth-file=user-token-details.csv`
+- curl를 이용해 접근하는 법
+```
+curl -v -k https://master-node-ip:6443/api/v1/pods -header "Authorization: Bearer LKsdufeANDhdoalkjd"
+```
+- 이것도 역시 권장하지 않는방법
+
+
+
+---
+
+
+## 63. TLS
+- SSL이랑 같은거임, TLS가 더 공식명칭임. 443포트 쓰는그거 ㅇㅇ
+
+
+## 64. TLS를 이용한 k8s 보안
+- Certificate(public key) 확장자 : *.crt, *.pem
+- Private Key 확장자 : *.key, *-kye.pem
+
+
+### 64.1 kube-apiserver 의 TLS (Server Certificates for Servers)
+- 이건 https통신을 함 apiserver.crt과 apiserver.key가 있다.
+
+### 64.2 etcd 클러스터의 TLS (Server Certificates for Servers)
+- 여기도 etcdserver.crt과 etcdserver.key가 있다.
+
+### 64.3 kubelet의 TLS (Server Certificates for Servers)
+- 여기도 kubelet.crt와 kubelet.key가 있다.
+
+### 64.4 kube-apiserver의 클라이언트는 뭐가 있을까
+1) admin유저 : admin.crt과 admin.key가 있다.
+2) kube-scheduler : scheduler.crt, scheduler.key
+3) kube-controller-manager : controller-manager.crt, controller-manager.key
+4) kube-proxy : kube-proxy.crt, kube-proxy.key
+
+
+### 64.5 kube-apisever는 etcd서버와 통신한다.
+- 사실 etcd서버와 통신하는 유일한것이 바로 kube-apiserver임
+- kube-apiserver는 etcd서버의 클라이언트임
+- 그래서 apiserver.crt과 apiserver.key를 클라이언트 입장으로도 씀
+- apiserver-etcd-client.crt와 apiserver-etcd-client.key를 생성해서 쓰기도한다.
+
+
+### 64.6 kubelet server
+- 이것도 apiserver가 클라이언트일때가 있다.
+- 이것도 마찬가지고 apiserver-kubelet-client.crt와 apiserver-kubelet-client.key가 만들어 질때가 있다.
+
+
+### 64.7 CA(Certificate Authority)
+- 지금까지 말한 모든걸 인증하기 위해 ca.crt와 ca.key가 있다.
+
+
+
+---
+
+## 65 인증서 생성
+- /etc/kubernetes/manifests/kube-apiserver.service의 옵션을 줘서 생성하거나(이건 그냥 할당만 하는거 아닌가?)
+- Kubeadm을 사용함
+
+---
+## 66. 기존 클러스터에서 인증서 보는법
+- /etc/kubernetes/manifests/kube-apiserver.service 에 *.crt, *.key등등이 할당되어있는걸 볼수있음
+
+### 66.1 /etc/kubernetes/pki/apiserver.crt에 있다는 인증서의 정보를 확인해보자
+- 인증서 디코딩, 세부사항 보기
+```
+openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout
+```
+
+
+### 67. 인증서 적용된거 로그 보기
+- 아래 명령어 입력하면 볼수 있는듯
+```
+kubectl logs etcd-master
+```
+
+
+
+### 68. 각종 키파일 저장되어있는 디렉토리
+``
+/etc/kubernetes/pki/
+``
+
+
+### 69. kube-apiserver의 로그보기
+- 아래 명령어 날리면 뜬 컨테이너의 상태를 볼수 있다.
+```
+crictl ps -a
+```
+
+- 로그를 보려면
+```
+crictl logs <컨테이너id>
+```
+
+
+
+## 70. 인증서 API(인증서 관리 방법 등)
+- admin유저 한명당 인증서 하나, 키 하나 를 들고있다.
+
+
+### 70.1 새로운 멤버가 들어왔다. 인증서를 발급해줘야한다.
+- 그사람에 대한 *.csr과 *.key는 있다고 하자
+- CertificateSigningRequest라는걸 생성해야함
+1) 일단 아래 명령어 날린걸 복사해놓자 (마지막 숫자 0임)
+```
+cat <csr파일명>.csr | base64 -w 0
+``` 
+2) 그리고 yaml파일을 만든다
+```
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: akshay
+spec:
+  groups:
+  - system:authenticated
+  request: <아까 복사한거>
+  signerName: kubernetes.io/kube-apiserver-client
+  usages:
+  - client auth
+```
+3) kubectl apply -f <만든파일명>.yaml
+
+
+
+
+
+
+
+### 70.2 만들어진 인증서 상태 확인하는방법
+```
+kubectl get csr
+```
+- 아마 팬딩상태일거임
+
+### 70.3 csr 승인
+```
+kubectl certificate approve <아까만든CSR명>
+```
+
+
+
+
+
+### 70.4 만들어진 csr의 yaml을 확인하는법
+```
+kubectl get csr <csr이름> -o yaml
+```
+
+
+
+### 70.5 csr 거부 하는법
+```
+kubectl certificate deny <csr이름>
+```
+
+### 70.6 아예 지우는법
+```
+kubectl delete csr agent-smith
+```
+
+
+
+
+---
+
+## 71. kubeConfig
+- 발급된 인증파일을 kubeconfig file에 등록할 수 있다.
+- $HOME/.kube/config
+- 여기에 이런저런 인증파일들이 지정되어있기 때문에 우리가 kubectl쓸때 이런저런 인증 옵션을 안넣을수 있었던것임
+
+
+
+
+
+### 71.1 kubeconfig 파일 구조
+1) clusters 섹션
+2) context 섹션
+3) user 섹션
+
+### 71.2 kubeconfig 구조 보려면
+```
+kubectl config view
+``
+
+
+### 71.3 current-context 바꾸는 명령어
+```
+kubectl config use-context dddd@dkddkd
+```
+
+- --kubeconfig옵션 : 디폴트 config파일말고 파일 위치를 지정해줄수있음
+```
+kubectl config --kubeconfig=/root/my-kube-config use-context research
+```
+
+
+
+
+
+---
+
+
+## 72. api groups
+1) /metrics
+2) /healthz
+3) /version
+4) /api   : Core group (ns, pod, rc, event, endpoind, nodes, pv, 등등등)
+5) /apis : names group (/apps, /extensions, /networking.k8s.io 등등등)
+6) /logs
+
+### 72.1 api들은 쿠버네티스 공식 문서에 자세히 나온다
+
+### 72.2 리스트 보는법
+- 아래처럼 하면 paths 볼수있음
+```
+curl http://localhost:6443 -k
+```
+- 근데 사실 이건 안됨, 아래 처럼 인증해야함
+```
+curl http://localhost:6443 -k --key admin.key --cert admin.crt --cacert ca.crt
+```
+
+- 아니면 kubectl proxy 커맨드를 이용해도됨
+```
+kubectl proxy
+```
+- 위의 명령어를 날리면 이제 앞으로의 명령은 프록시를 태움
+```
+curl http://localhost:6443 -k
+```
+- 이제 이렇게만 날리면 된다.
+
+
+
+
+
+
+
+---
+
+## 73. Authorization
+
+### 73.1 클러스터에 왜 Authorization이 필요한가??
+- 우린 관리자로써 kubectl을 이용하여 별의별걸 다 할수 있다
+- 이제 다른사람이 클러스터에 액세스 할거다 (여긴 사람이 아니라 모니터링 app등 시스템도 포함된다)
+- 우린 모두가 같은 접근 수준을 갖길 원하지 않는다.
+
+
+### 73.2 k8s가 제공하는 Authorization 메커니즘
+1) Node : 
+2) ABAC : 
+3) RBAC : 
+4) Webhook :  
+5) AlwaysAllow (이게 디폴트 값임)
+6) AlwaysDeny
+
+
+## 73.3 현재 어떤 메커니즘을 쓰는지 확인하는법
+```
+kubectl describe pod kube-apiserver-controlplan -n kube-system
+```
+에서 --authorization-mode를 확인해보자
+
+
+
+
+---
+
+## 74. RBAC (Role Base Access Contorl)
+- 룰 만드는 yaml
+```
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+name: developer
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "get", "create", "update", "delete"]  #파드를 list get create updelete 할수 있음
+- apiGroups: [""]
+  resources: ["ConfigMa"]
+  verbs: ["create"]
+``` 
+
+- 룰 바인딩 : 사용자 개체를 역할에 연결
+```
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+name: devuser-developer-bindin
+subjects:
+- kind: User
+  name: dev-user
+  apiGroup: rbac.authorization.k8s.io
+  roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+```
+
+### 74.1 롤보기
+```
+kubectl get roles
+```
+
+### 74.2 롤바인딩 보기
+```
+kubectl get rolebindings
+```
+
+### 74.3 롤 자세히 보기
+```
+kubectl describe role <role이름>
+```
+
+### 74.4 롤바인딩 자세히 보기
+```
+kubectl describe rolebinding <롤바인딩 이름>
+```
+
+
+### 74.5 내가 특정 커맨드에 대한 권한이 있는지 확인해보는법
+```
+kubectl auth can-i create deployment
+```
+
+
+### 74.6 특정 사용자가 커맨드에 대한 권한이 있는지 확인해보는법
+```
+kubectl auth can-i create pod --as dev-user
+```
+
+### 74.7 명령형으로 role만들기
+```
+kubectl create role <룰이름> --namespace=default --verb=list,create,delete --resource=pods
+```
+
+### 74.8 명령형으로 RoleBinding만들기
+```
+kubectl create rolebinding dev-user-binding --namesapce=default --role=developer --user=dev-user
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
