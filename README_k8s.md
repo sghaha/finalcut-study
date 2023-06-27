@@ -2185,7 +2185,7 @@ kubectl delete csr agent-smith
 ### 71.2 kubeconfig 구조 보려면
 ```
 kubectl config view
-``
+```
 
 
 ### 71.3 current-context 바꾸는 명령어
@@ -2344,6 +2344,101 @@ kubectl create role <룰이름> --namespace=default --verb=list,create,delete --
 ```
 kubectl create rolebinding dev-user-binding --namesapce=default --role=developer --user=dev-user
 ```
+
+
+
+
+
+
+---
+
+## 75. 크러스터 롤, 크러스터 롤 바인딩
+- 노드를 네임스페이스로 분리할수 있을까??
+- 못한다. 클러스터 범위의 리소스 이기 때문이다
+- 그래서 이런것들은 Role과 RoleBinding으로 auth를 못한다.
+- 클러스터 롤과 클러스터 롤 바인딩으로 한다.
+- 기본적으로 롤과 롤바인딩이랑 비슷한 개념이다. 
+
+
+
+
+### 75.1 명령형으로 클러스터 룰 만들기
+```
+kubectl create clusterrole <룰이름> --verb=get,watch,list,create,delete --resource=nodes
+```
+
+```
+kubectl create clusterrole storage-admin --verb=get,watch,list,create,delete --resource=persistentvolumes,storageclasses
+```
+
+
+### 75.2 명령형으로 클러스터 룰 바인딩 만들기
+```
+kubectl create clusterrolebinding <클러스터룰바인딩이름> --clusterrole=node-admin --user=michelle
+```
+```
+kubectl create clusterrolebinding michelle-storage-admin --clusterrole=storage-admin --user=michelle
+```
+
+
+---
+
+## 76. 서비스어카운트
+- k8s에는 두가지 유형의 계정이 있다.
+1) 유저 (ex. 관리자, 개발자)
+2) 서비스어카운트 (ex. 프로메테우스, 젠킨스)
+
+
+
+### 76.1 서비스어카운트 생성
+```
+kubectl create serviceaccount <SA이름>
+```
+
+### 76.2 서비스어카운트 토큰
+- sa가 생성되면 토큰이 자동으로 생성된다.
+- describe하면 볼수있다.
+```
+kubectl describe serviceaccount <sa이름>
+```
+- 토큰은 k8s api에 인증하는 동안 외부앱이 반드시 사용해야하는 것이다.
+
+### 76.3 토큰 시크린 둘러보기
+```
+kubectl describe secret <sa토큰명>
+```
+
+
+### 76.4 디폴트 sa
+- 모든 네임스페이스에는 defualt라는 sa가 생성된다
+- 그리고 만약에 파드가 생성되면 디폴트 sa와 토큰이 볼륨에 마운트 된다
+- 파드를 describe를 하면 마운트된 볼륨의 위치와 토큰을 볼수있다.
+- 아래 명령어로 토큰을 볼수 있다.
+```
+kubectl exec -it <파드명> --ls <위치>
+```
+```
+kubectl exec -it <파드명> ls <위치>
+```
+- ca.crt, namespace, token이라는 파일세개를 볼 수 있다.
+- token : 실제 토큰을 가진 파일
+```
+kubectl exec -it <파드명> cat <토큰파일 주소>
+```
+
+### 76.5 파드의 서비스 어카운트 변경
+- spec 섹션 하위에 serviceAccountName: <SA명> 을 넣어주면된다.
+- 그런데 이건 파드 수정으로 적용이 안된다. 파드를 삭제하고 다시 만들어야 한다.
+- 그러나 디플로이먼트로 했다면 알아서 롤아웃이 발생하여되어 삭제할 필요없다.
+
+### 76.6 1.22 1.24에서 변경된점
+- 파드가 생성되면 기본 sa 토큰에 의존하지 않고 만료기한이 있는 토큰이 TokenRequestAPI를 통해 생성된다.
+- sa가 생성될때 더이상 토큰이 자동으로 생성되지 않는다. 토큰을 만들어줘야한다.
+
+
+
+
+
 
 
 
