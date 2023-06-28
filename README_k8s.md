@@ -2439,6 +2439,270 @@ kubectl exec -it <파드명> cat <토큰파일 주소>
 
 
 
+---
+## 80. Image
+
+- 우리는 샘플파드를 만들때 nginx 이미지를 자주 썼는데 아래와 같이 항상 yaml에 명시해줬다.
+```
+image: nginx
+```
+- 근데 이게 어떻게 가능했던걸까
+- nginx는 도커의 이미지 명명규칙을 따르는 image혹은 repository이다
+- 사실은
+```
+image: library/nginx
+``` 
+- 라고 쓰는게 맞는건데 축약되어있는거다
+- 첫부분은 유저 어카운트명인데 아무것도 명시하지 않으면 자동적으로 libarary라고 인식한다.
+- library는 도커 공식 이미지가 저장되는 기본계정의 이름
+- 근데 이것도 축약되어있는거다
+```
+image: docker.io/library/nginx
+```
+- 더 앞에 레지스트리를 넣어줘야하는건데 안넣어서 기본값인 docker.io가 들어간 효과임 ㅇㅇ
+- 레지스트리 : 이미지를 저장하는 곳, 새 이미지를 생성하거나 업데이트 할때마다 레지스트리에 푸시 하는거임
+
+
+---
+## 81. Private Image
+- 아래처럼 프라이빗 이미지를 yaml에 넣었을때 인증/로그인은 어떻게 구현할까?
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+spec:
+  containers:
+  - name: nginx
+    image: private-registry.io/apps/internal-app
+```
+
+- 일단 docker레지스트리 관련  시크릿을 하나 생성한다. (이건 yaml파일로 뺀다음에 apply하면 안되드라 암호화 관련된거때문인듯)
+```
+kubectl create secret docker-registry <시크릿명> \
+	--docker-server=<private-registry.io> \
+	--docker-username=<registry-user> \
+	--docker-password=<registry-password> \
+	--docker-email=<registry-user@org.com>
+```
+
+
+- 그리고 yaml에 아래와 같이 쓴다.
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+spec:
+  containers:
+  - name: nginx
+    image: private-registry.io/apps/internal-app
+  imagePullSecrets:
+  - name: <시크릿이름>
+```
+
+
+
+---
+## 82.0 강제로 바꾸기
+```
+kubectl replace --force -f /tmp/kubedkdfjf.yaml
+```
+
+## 83. Security Context
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-pod
+spec:
+  containers:
+  - name: ubuntu
+    image: ubuntu
+    command: ["sleep","3600"]
+    securityContext:
+      runAsUser: 1000
+      capabilities:
+        add: ["MAC_ADMIN"]
+```
+
+---
+## 84. 네트워크 Policy
+- 파드간의 트래픽은 기본적으로 all allow임
+- 어디어디서 들어오는 몇번 포트만 허용할거다! 이런 정책이 필요함
+- 일단 pod에 label을 붙이고 network policy에 podSelector를 붙인다.
+- 그다음에 규칙을 만듦
+- 아래는 예시
+```
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: 
+  name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+      matchLabels:
+        name: api-pod
+    ports:
+    - protocol: TCP
+      port: 3306
+```
+
+
+
+### 84.1 파드 이름과 네임스페이스까지 & 조건으로 ingress를 허용함
+```
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: 
+  name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+      matchLabels:
+        name: api-pod
+      namespaceSelector:
+      matchLabels:
+        name: pod
+    ports:
+    - protocol: TCP
+      port: 3306
+```
+
+### 84.2 파드 이름과 네임스페이스까지 || 조건으로 ingress를 허용함
+```
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: 
+  name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+      matchLabels:
+        name: api-pod
+    - namespaceSelector:
+      matchLabels:
+        name: pod
+    ports:
+    - protocol: TCP
+      port: 3306
+```
+
+
+### 84.3 파드 이름과 네임스페이스, ip(외부도 가능)까지 || 조건으로 ingress를 허용함
+```
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: 
+  name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+      matchLabels:
+        name: api-pod
+    - namespaceSelector:
+      matchLabels:
+        name: pod
+    - ipBlock:
+      cidr: 2.168.0.1/32
+    ports:
+    - protocol: TCP
+      port: 3306
+```
+
+
+
+### 84.4 egress까지
+```
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: 
+  name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+      matchLabels:
+        name: api-pod
+    - namespaceSelector:
+      matchLabels:
+        name: pod
+    - ipBlock:
+      cidr: 2.168.0.1/32
+    ports:
+    - protocol: TCP
+      port: 3306
+  egress:
+  - to:
+    - ipBlock:
+      cidr: 2.168.0.1/32
+    ports:
+    - protocol: TCP
+      port: 80 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
