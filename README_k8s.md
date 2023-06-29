@@ -2672,6 +2672,10 @@ spec:
 ```
 
 
+### 84.5 네트워크 폴리시 보기
+```
+k get networkpolicy --all-namespaces
+```
 
 
 
@@ -2683,39 +2687,260 @@ spec:
 
 
 
+---
+
+## 85. 도커의 Storage
+- 시스템에 도커를 설치하면 아래 네군데에 데이터를 저장한다.
+1) /var/lib/docker/aufs
+2) /var/lib/docker/containers
+3) /var/lib/docker/image
+4) /var/lib/docker/volumes
+- 여기서 데이터란 docker 호스트에서 실행되는 이미지 및 컨테이너와 관련된 파일을 말함
+
+### 85.1 도커 레이어드 아키텍처
+- 아래와 같이 Dockerfile이 있다고하자
+```
+FROM Ubuntu
+
+RUN apt-get update $$ apt-get -y install python
+
+RUN pip install flask flask-mysql
+
+COPY . /opt/source-code
+
+ENTRYPOINT FLASK_APP=/opt/source-code/app.py flask run
+```
+
+- 이걸 빌드하면 
+```
+docker build Dockerfile -t sghaha/my-custom-app
+```
+- 레이어가 쌓인다.
+1) 우분투 레이어
+2) apt 패키지 변경
+3) pip 패키지 변경
+4) 소스코드
+5) 엔트리포인트 업데이트
+
+- 이걸 빌드헀고 이제 두번째 도커 파일이 있다고 하자
+```
+FROM Ubuntu
+
+RUN apt-get update $$ apt-get -y install python
+
+RUN pip install flask flask-mysql
+
+COPY app2.py /opt/source-code
+
+ENTRYPOINT FLASK_APP=/opt/source-code/app2.py flask run
+```
+- 이것도 레이어가 쌓인다.
+1) 우분투 레이어
+2) apt 패키지 변경
+3) pip 패키지 변경
+4) 소스코드
+5) 엔트리포인트 업데이트
+- 근데 1번부터 3번까지는 똑같아서 빌드안해도 된다!!!!!!!!!!! 4-5번만 새로 빌드하면 된다.
+- 이럼 디스크도 절약하고 시간도 절약함
+- 이건 같은 파일을 rebuild할때도 비슷하게 적용되어서 rebuild할때 시간이 절약된다.
+
+- 빌드를 다하고 이제 실행한다고 생각해보자
+```
+docker run sghaha/my-custom-app
+```
+- 그러면 6번 레이어가 쌓인다.
+- 5번까지의 레이어는 `이미지레이어라`고 부르며 read-only이고
+- 6번 레이어는 `컨테이너 레이어`라고 부르며 read/write임
+- 앱이 실행되면 6번 레이어에 데이터를 저장할텐데 이건 휘발된다.
+- 그래서 volumes이라는곳에 저장함
+
+### 85.2 도커 볼륨
+- mysql을 돌릴거고 볼륨을 마운트 해준다고 생각해보자
+- 아래와 같이 볼륨을 만든다
+```
+docker volume crate data_volume
+```
+
+- 그럼 `/var/lib/docker/volumes/data_volume`라는 폴더가 만들어진다.
+- 그리고 볼륨을 마운트 해서 도커를 실행한다
+```
+docker run -v data_volume:/var/lib/mysql mysql
+```
+- 이러면 컨테이너 안에 볼륨이 마운트됨
+- 컨테이너가 파괴되어도 데이터는 남아있는다
+
+- 만약 볼륨을 만들지 않고
+```
+docker run -v data_volume_2222:/var/lib/mysql mysql
+```
+- 이런식으로 없는 볼륨을 마운트하려고 하면 자동으로 볼륨을 만들어준다.
+
+### 85.3 만약 볼륨 말고 다른걸 마운팅 하고 싶다면?
+- 만약 /data/mysql이라는 폴더를 마운팅하고 싶다면
+```
+docker run -v /data/mysql:/var/lib/mysql mysql
+```
+- 이런식으로 하면된다. 이걸 바인드 마운팅이라 한다.
+- 근데 사실 -v는 예전방법이라고 한다.
+- 아래 방법이 더 권장 된다고함
+```
+docker run --mount type=bind,source=/data/mysql,target=/var/lib/mysql mysql
+```
 
 
 
 
 
+## 86. 컨테이너 스토리지 인터페이스
+- 과거 k8s는 도커를 런타임 엔진으로만 사용했다.
+- 그리고 도커 코드가 k8s에 내장되어있엇다
+- 근데 이젠 CRI(Container Runtime Interface)라고라는게 생겨서 이거에만 만족시키면 k8s에 넣을수있다.
+- 이거랑 비슷하게 CNI(네트워킹)이게 있어 이거에 맞춰 개발하면 플러그인을 만들수 있음
+- 그리고 CSI(컨테이너 스토리지 인터페이스)라는게 있다.
 
 
 
+## 87. Volumes
+- 이제 k8s 파드에 볼륨을 붙인다.
+- 아래는 1에서 100까지 무작위 숫자를 파일에 저장하는 파드이다
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: random-number-generator
+spec:
+  containers:
+  - image: alpine
+    name: alpine
+    command: ["/bin/sh", "-c"]
+    args: ["shuf -i 0-100 -n 1 >> /opt/number.out;"]
+```
+
+- 이제 볼륨을 지정해보자
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: random-number-generator
+spec:
+  containers:
+  - image: alpine
+    name: alpine
+    command: ["/bin/sh", "-c"]
+    args: ["shuf -i 0-100 -n 1 >> /opt/number.out;"]
+    volumeMounts:
+    - mountPath: /opt
+      name: data-volume
+  volumes:
+  - name: data-volume
+    hostPath:
+      path: /data
+      type: Directory
+```
+- 근데 이건 그 노드의 /data 디렉토리를 마운트 시키는거라, 다중 노드 시스템엔 권장되지 않는다.
+- 그래서 다른 서비스를 쓰는게좋다
+- 아래는 aws ebs를 쓰는 예시임
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: random-number-generator
+spec:
+  containers:
+  - image: alpine
+    name: alpine
+    command: ["/bin/sh", "-c"]
+    args: ["shuf -i 0-100 -n 1 >> /opt/number.out;"]
+    volumeMounts:
+    - mountPath: /opt
+      name: data-volume
+  volumes:
+  - name: data-volume
+    awsElasticBlockStore:
+      volumeID: <EBS 볼륨 ID>
+      fsType: ext4
+```
 
 
 
+--- 
+
+## 88. Persistent Volumes
+- persistent volumes이 저장소라고 생각하면될듯
+- 각 파드가 공간을 할당받아서 쓴다.
+- PV만들기
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-vol1
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 1Gi
+  hostPath: # 이건 노드의 로컬 디렉토리에서 저장소를 이용하는거라 운영계에는 사용하지 않음
+    path: /tmp/data
+```
+- ebs쓴다고하면
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-vol1
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 1Gi
+  awsElasticBlockStore:
+    volumeID: <EBS 볼륨 ID>
+    fsType: ext4
+```
 
 
 
+## 89. Persistent Volume Claims
+- PV를 다른 리소스에 할당 시켜주기 위한것인가봄
+- PVC는 무조건 하나의 PV를 가지고있다. 1:1관계임
+- 만들어 보자
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mycliam
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi
+```
+-PVC를 만들면 PV중에 제일 적합한걸 찾아서 1:1 매칭 시켜줌
 
 
 
+### 89.1 pod에서 pvc를 사용하는법
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx
+      volumeMounts:
+        - mountPath: "/var/www/html"
+          name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: myclaim
+```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+- pvc가 pod에 사용되고 있다면 pod에서 사용하고 있기 때문에 pvc를 지울수 없다.
+- pod에 연결되어있는 pvc를 삭제 요청하면 그때는 안지워 지지만 pod가 지워지면 pvc도 같이 지워짐
 
 
 
