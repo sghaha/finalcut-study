@@ -2944,6 +2944,155 @@ spec:
 
 
 
+---
+
+### 90. 스토리지 클래스
+- pv를 만들때 우리가 구글클라우드를 쓴다면 구글클라우스 명령어로 계속 볼륨을 만들고 pv를 만들어야한다
+- 근데 스토리지 클래스를 만들면 걍 pv가 알아서 만들어진단다
+
+
+
+
+
+
+---
+
+
+# 네트워킹
+
+## 91. 네트워크 관련 명령어
+```
+ip link
+```
+```
+ip addr
+```
+```
+ip addr add 192.168.1.10/24 dev eth0
+```
+```
+ip route
+```
+```
+ip route add 192.168.1.0/24 via 192.168.2.1
+```
+```
+arp
+```
+```
+netstat -plnt
+```
+
+
+---
+
+## 100. CNI practice
+- kubelet의 컨터이너 런타임 엔트포인트 알아보기
+```
+ps -aux | grep kubelet | grep --color container-runtime-endpoint
+```
+
+- CNI 바이너리는 위치 디폴트값은 /opt/cni/bin 이다
+
+- k8s 클러스터가 쓰는 cni플러그인 보려면
+```
+ls /etc/cni/net.d
+```
+
+
+
+## 101. ip address management
+- pod에 ip를 어캐 할당할까?
+- CNI플러그인의 역할임 ㅇㅇ
+- CNI에 두개의 플러그인을 내장한다. DHCP / host-local
+- /etc/cni/net.d/net-script.conf에 ipam이라는 섹션에 지정된다.
+
+## ip link 명령어
+- 네트워크 인터페이스를 표시하고 수정함
+- 아래는 브릿지 타입의 디바이스를 출력하라는거임
+```
+ip link show type bridge
+```
+
+
+
+---
+
+## 102. service networking
+
+- 서비스를 생성하면 ip가 할당하고 클러스터의 모든 포드에서 엑세스 할수 있다.
+- 파드는 노드에 걸쳐 호스트되는 반면 서비스는 클러스터에 걸쳐 호스트된다.
+- 이걸 클러스터에만 접근할수 있게 한게 clusterIP
+- 외부에도 포트 뚫어주는게 NodePort
+
+
+### 102.1 서비스 네트워킹 practice
+- 서비스에 할당되는 ip 대역 보는법
+```
+cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep cluster-ip-range
+```
+
+- kube-proxy가 어떤 종류의 proxy를 쓰는지 확인하는 방법
+```
+k logs <kube-proxy 파드 명> -n kube-system | grep -i proxy
+```
+
+
+
+- kube-proxy는 데몬셋으로 생성된다. (아래 명령어로 보임)
+```
+k get ds -A
+```
+
+
+---
+
+## 103. k8s의 DNS
+
+- CoreDNS의 config 파일은 어디있을까?
+- CoreDNS deploy를 자세히 보면 나옴
+```
+k describe deploy coredns -n kube-system | grep -A2 Args
+```
+
+
+
+
+
+
+
+
+
+
+## 110. kubeadm으로 설치하는 과정
+1) VM들이 필요하다 (마스터 노드, 워커 노드)
+2) 각각의 VM에 컨테이너 호스트를 설치한다. (like containerd)
+3) 모든 노드에 kubeadm을 설치한다.
+4) 마스터를 init한다
+5) pod network를 설정한다.
+6) 워커노드가 마스터 노드에 join한다.
+
+
+
+## 111. 자동완성
+공식문서에서
+`kubectl Cheat Sheet`로 나오는거
+
+
+
+## 112. json
+$.prizes[?(@.year==2014)].laureates[*.]irstname
+$.status.containerStatuses[?(@.name == 'redis-container')].restartCount
+
+
+
+
+https://junior-developer.tistory.com/m/97
+
+
+
+
+
 
 
 
