@@ -3087,17 +3087,26 @@ $.status.containerStatuses[?(@.name == 'redis-container')].restartCount
 
 
 
+
+
+## 113. 라이트닝 랩 전체
 https://junior-developer.tistory.com/m/97
 
 
 
+## 115. 라이트닝 랩 2번문제
+https://naa0.tistory.com/344
 
 
 
-
-
-
-
+## 116. etcd backup
+```
+ETCDCTL_API=3 etcdctl \ 
+--cacert=/etc/kubernetes/pki/etcd/ca.crt \
+--cert=/etc/kubernetes/pki/etcd/server.crt \
+--key=/etc/kubernetes/pki/etcd/server.key \
+snapshot save /opt/etcd-backup.db
+```
 
 
 
