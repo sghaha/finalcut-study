@@ -2,7 +2,7 @@
 - 클러스터 아키텍처
 - API primitives
 - Services & Other Network Primitives
-
+ 
 
 ## 2. k8s의 목적
 - 자동화된 방식으로 우리의 응용프로그램을 컨테이너 방식으로 호스팅
@@ -1652,6 +1652,17 @@ kubectl get secrets
 
 
 
+## 47-1 pod에 secret 얹기
+https://kubernetes.io/docs/tasks/inject-data-application/distribute-credentials-secure/#create-a-pod-that-has-access-to-the-secret-data-through-a-volume
+
+
+
+---
+<br/>
+<br/><br/>
+<br/>
+<br/>
+
 
 
 
@@ -1839,6 +1850,9 @@ kubectl uncordon node-1
 1) 리소스 컨피그 파일
 2) etcd 클러스터
 3) Persistent Volumes
+
+### 54.2.0 etcd클러스터 백업하는법
+https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/#backing-up-an-etcd-cluster
 
 ### 54.2 etcd 클러스터 버전 확인하는법
 ```
@@ -3110,4 +3124,64 @@ snapshot save /opt/etcd-backup.db
 
 
 
+
+## 117. expose
+```
+kubectl expose pod-- messaging --port=6379 --name messaging-service
+```
+```
+k expose depoly hr-web-app --name=hr-web-app --type NodePort --port 8080
+```
+
+
+
+## 118.스태틱 파드 만들기
+```
+kubectl run --restart=Never --image=busybox static-busybox --dry-run=client -oyaml --command -- sleep 1000 > /etc/kubernetes/manifests/static-busybox.yaml
+```
+
+
+## 119. 참고 블로그
+```
+https://daintree.tistory.com/m/13
+```
+
+## 120. 
+```
+k create deploy hr-web-app --image=kodekloud/webapp-color --replicas=2
+```
+
+
+## 121. hostPath로 PV만드는 법
+```
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-analytics
+spec:
+  capacity:
+    storage: 100Mi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+      path: /pv/data-analytics
+```
+
+
+## 122. 파드에 emptyDir 엮어주는법
+```
+https://kubernetes.io/docs/concepts/storage/volumes/#emptydir
+```
+
+
+## 123. mock2 8번
+```
+kubectl run test-nslookup --image=busybox:1.28 --rm -it --restart=Never -- nslookup nginx-resolver-service > /root/CKA/nginx.svc
+```
+
+```
+kubectl run test-nslookup --image=busybox:1.28 --rm -it --restart=Never -- nslookup 10-244-192-4.default.pod.cluster.local > /root/CKA/nginx.pod
+```
 
