@@ -3185,3 +3185,61 @@ kubectl run test-nslookup --image=busybox:1.28 --rm -it --restart=Never -- nsloo
 kubectl run test-nslookup --image=busybox:1.28 --rm -it --restart=Never -- nslookup 10-244-192-4.default.pod.cluster.local > /root/CKA/nginx.pod
 ```
 
+
+## 124. mock3 1번
+1) pvviewer라는 이름의 sa를 default 네임스페이스에 만든다. (여기에 클러스터 내부의 모든 PV를 list하는 권한을 줄거다.)
+2) 클러스터 롤을 이용한다.
+3) 클러스터 롤 이름은 pvviewer-role
+4) 클러스터 롤 바인딩 이름은 pvviewer-role-binding
+5) 그리고, pvviewer라는 pod를 만든다 (image: redis)
+
+### 124.1 sa를 만들자
+```
+kubectl create sa pvviewer
+```
+
+### 124.2 클러스터 롤을 만들자
+```
+kubectl create clusterrole pvviewer-role --verb=list --resource=pv
+```
+
+
+### 124.3 클러스터롤 바인딩을 만들자
+```
+kubectl create clusterrolebinding pvviewer-role-binding --clusterrole=pvviewer-role --user=pvviewer
+```
+
+### 124.4 pod yaml을 만들자
+```
+kubectl run pvviewer --image=redis --dry-run=client -o yaml > pod.yaml
+```
+
+- yaml을 대충 아래와 같이 수정하자
+```
+vi pod.yaml
+```
+```
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pvviewer
+spec:
+  serviceAccountName: pvviewer
+...
+```
+- pod 적용
+```
+kubectl apply -f pod.yaml
+```
+
+
+
+
+
+
+
+
+
+
+
+
